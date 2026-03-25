@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Chat en tiempo real — Kick</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+Tammudu+2:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0a0a;
+      --bg-panel: #111111;
+      --text: #e5e7eb;
+      --muted: #888;
+      --font: "Baloo Tammudu 2", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text);
+      font-family: var(--font);
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      min-height: 100vh;
+      font-weight: 800;
+    }
+
+    #chat-section {
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #channel-input-container {
+      padding: 1rem;
+      width: 100%;
+      background: var(--bg-dark);
+    }
+
+    #chat {
+      height: auto;
+      overflow-y: auto;
+      padding: 1rem;
+      scrollbar-gutter: stable;
+      scroll-behavior: smooth;
+      background: transparent;
+      flex-grow: 1;
+      font-size: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #chat::-webkit-scrollbar { width: 0px; }
+
+    .msg {
+      margin-bottom: 0.3rem;
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      filter: drop-shadow(2px 2px 0.2rem black);
+      transition: all 0.25s ease;
+      opacity: 0;
+      transform: translateY(5px);
+      animation: fadeUp 0.3s ease forwards;
+      line-height: 30px;
+      display: block;
+      word-wrap: break-word;
+    }
+
+    .meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 0;
+      flex-wrap: nowrap;
+    }
+
+    .badge-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 3px;
+      object-fit: contain;
+      vertical-align: middle;
+      margin-right: 3px;
+      margin-bottom: 2px;
+      display: inline-block;
+    }
+
+    .user {
+      font-weight: 800;
+      font-size: 1em;
+      display: inline;
+      align-items: center;
+      gap: 2px;
+    }
+    
+    .user::after {
+      content: ': ';
+    }
+
+    .text {
+      color: var(--text);
+      line-height: 1.4;
+      word-wrap: break-word;
+      font-size: 1em;
+      background: transparent;
+      display: inline;
+      margin-left: 5px;
+    }
+
+    /* ===================== EMOTES ===================== */
+    .emote {
+      width: 32px;
+      height: 32px;
+      vertical-align: middle;
+      margin: 0 3px;
+      border-radius: 6px;
+      max-width: 75px;
+      max-height: 32px;
+      margin-right: -3px;
+    }
+
+    .emote-third {
+      height: 32px;
+      width: auto;
+      vertical-align: middle;
+      margin: 0 3px;
+      border-radius: 6px;
+      max-width: 75px;
+      max-height: 32px;
+      margin-right: -3px;
+    }
+
+    .emote-zero-width {
+      position: absolute;
+      margin-left: -32px;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <section id="chat-section">
+    <div id="channel-input-container">
+      <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+        <input type="text" id="channel-name-input" placeholder="Nombre del canal (ej: elshark)" 
+               style="flex: 1; padding: 0.75rem 1rem; border-radius: 8px; border: none; background: #222; color: #fff; font-size: 16px; font-family: var(--font);">
+        <button id="load-chat-btn" 
+                style="padding: 0.75rem 1.5rem; border-radius: 8px; border: none; background: #53fc18; color: #000; font-size: 16px; font-weight: 700; cursor: pointer; font-family: var(--font);">
+          Cargar Chat
+        </button>
+      </div>
+      <div id="status-message" style="color: var(--muted); font-size: 14px; margin-bottom: 0.5rem;"></div>
+      <div id="link-container" style="margin-top: 0.5rem; padding: 0.75rem; background: #1a1a1a; border-radius: 8px; display: none;">
+        <label style="color: #53fc18; font-size: 14px; display: block; margin-bottom: 0.5rem; font-weight: 700;">🔗 Link para compartir:</label>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <input type="text" id="generated-link" readonly
+                 style="flex: 1; padding: 0.5rem 1rem; border-radius: 8px; border: none; background: #0a0a0a; color: #53fc18; font-size: 13px; font-family: monospace;">
+          <button id="copy-link-btn" 
+                  style="padding: 0.5rem 1rem; border-radius: 8px; border: none; background: #333; color: #fff; font-size: 14px; cursor: pointer;">
+            📋 Copiar
+          </button>
+          <button id="open-link-btn" 
+                  style="padding: 0.5rem 1rem; border-radius: 8px; border: none; background: #53fc18; color: #000; font-size: 14px; font-weight: 700; cursor: pointer;">
+            🚀 Abrir
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="chat" style="display: none;"></div>
+  </section>
+
+<script>
+  // Proxy CORS
+  const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+  const CORS_PROXY_FALLBACK = "https://api.codetabs.com/v1/proxy?quest=";
+  
+  // WebSocket de Pusher
+  const PUSHER_WS_URL = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=7.6.0&flash=false";
+  
+  let CHANNEL_ID = null;
+  let CHATROOM_ID = null;
+  let CHAT_URL = null;
+  let currentChannel = null;
+  let kickWS = null;
+  const chatDiv = document.getElementById("chat");
+  const inputContainer = document.getElementById("channel-input-container");
+  const channelInput = document.getElementById("channel-name-input");
+  const loadBtn = document.getElementById("load-chat-btn");
+  const statusMsg = document.getElementById("status-message");
+  const linkContainer = document.getElementById("link-container");
+  const generatedLink = document.getElementById("generated-link");
+  const copyLinkBtn = document.getElementById("copy-link-btn");
+  const openLinkBtn = document.getElementById("open-link-btn");
+  let messageIds = new Set();
+
+  // ============ STORAGE ============
+  let emotesData = {
+    ffz: { global: {}, channel: {} },
+    bttv: { global: {}, channel: {}, shared: {} },
+    seventv: { global: {}, channel: {}, community: {} }
+  };
+
+  let subBadgesByMonths = {}; // "1", "2", "3", "6", "9", "12", "18", "24"
+
+  const KICK_BADGES = {
+    "moderator": "assets/mod.svg",
+    "vip": "assets/vip.svg",
+    "verified": "assets/verified.png",
+    "broadcaster": "assets/broadcaster.png",
+    "og": "assets/og.png",
+    "subscriber": "assets/subscriber.png",
+    "sub_gifter": "assets/sub_gifter.png",
+    "founder": "assets/founder.png"
+  };
+
+  const STREAMER_CUSTOM_7TV_SETS = {
+    "carlogato": ["01HTTD778R000E3Y75DEQDXPKB"],
+    "elshark": ["01KKFNJR4WRG7W82S12R3W1TWW"],
+    "elviejoesteban": ["01JPCFHR3A28YZR5VA53J8W2MJ"],
+  };
+
+  // ============ FETCH HELPERS ============
+  function getUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("channel");
+  }
+
+  function generateLink(channelName) {
+    const baseUrl = window.location.href.split("?")[0];
+    return `${baseUrl}?channel=${encodeURIComponent(channelName)}`;
+  }
+
+  async function fetchDirect(url, timeout = 5000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    try {
+      const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }, signal: controller.signal, cache: 'no-store' });
+      clearTimeout(timeoutId);
+      return await res.json();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  }
+
+  async function fetchWithProxy(url, timeout = 5000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    try {
+      const proxyUrl = CORS_PROXY + encodeURIComponent(url);
+      const res = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' });
+      clearTimeout(timeoutId);
+      return await res.json();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      try {
+        const fallbackUrl = CORS_PROXY_FALLBACK + encodeURIComponent(url);
+        const res2 = await fetch(fallbackUrl, { signal: controller.signal, cache: 'no-store' });
+        clearTimeout(timeoutId);
+        return await res2.json();
+      } catch (err2) {
+        clearTimeout(timeoutId);
+        throw err2;
+      }
+    }
+  }
+
+  async function raceFetch(url) {
+    return Promise.race([fetchDirect(url).catch(() => null), fetchWithProxy(url).catch(() => null)]).then(r => r || fetchWithProxy(url));
+  }
+
+  const smartFetch = raceFetch;
+
+  // ============ CARGAR BADGES DE SUSCRIPTOR ============
+  async function loadChannelSubBadges(channelSlug) {
+    try {
+      const data = await smartFetch(`https://kick.com/api/v2/channels/${channelSlug}/info`);
+
+      subBadgesByMonths = {};
+
+      if (data?.subscriber_badges && Array.isArray(data.subscriber_badges)) {
+        data.subscriber_badges.forEach(badge => {
+          const monthsKey = String(badge.months || badge.level || 1);
+          let badgeUrl = badge.badge_image?.src
+                      || badge.badge_image?.original
+                      || badge.image_url
+                      || badge.url;
+
+          if (badgeUrl) {
+            if (!badgeUrl.startsWith('http')) badgeUrl = `https:${badgeUrl}`;
+            subBadgesByMonths[monthsKey] = badgeUrl;
+          }
+        });
+      }
+
+      // Fallback v1 si v2 falla
+      if (Object.keys(subBadgesByMonths).length === 0) {
+        const fallbackData = await smartFetch(`https://kick.com/api/v1/channels/${channelSlug}`);
+        if (fallbackData?.subscriber_badges) {
+          fallbackData.subscriber_badges.forEach(tier => {
+            const monthsKey = String(tier.months || tier.level || 1);
+            const badgeUrl = tier.image_url || tier.badge?.src || tier.badge_image?.src || tier.url;
+            if (monthsKey && badgeUrl) {
+              subBadgesByMonths[monthsKey] = badgeUrl.startsWith('http') ? badgeUrl : `https:${badgeUrl}`;
+            }
+          });
+        }
+      }
+
+      if (Object.keys(subBadgesByMonths).length > 0) {
+        const meses = Object.keys(subBadgesByMonths).sort((a,b)=>Number(a)-Number(b)).join(', ');
+        statusMsg.textContent += ` | ${Object.keys(subBadgesByMonths).length} sub-badges (meses: ${meses})`;
+        console.log("Sub-badges cargados:", subBadgesByMonths);
+      } else {
+        statusMsg.textContent += " | No sub-badges personalizados";
+      }
+    } catch (err) {
+      console.error("Error sub-badges:", err);
+      statusMsg.textContent += " | Error al cargar sub-badges";
+    }
+  }
+
+  // ============ LÓGICA DE TIERS (según tu observación) ============
+  function getSubBadgeKey(months) {
+    const m = Number(months) || 1;
+
+    if (m <= 3) return String(m);      // 1, 2, 3 → usa su propio badge
+    if (m <= 5) return "3";            // 4, 5 → usa el de 3
+    if (m <= 8) return "6";            // 6, 7, 8 → usa el de 6
+    if (m <= 11) return "9";           // 9,10,11 → usa el de 9
+    if (m <= 17) return "12";          // 12–17 → usa el de 12
+    if (m <= 23) return "18";          // 18–23 → usa el de 18
+    return "24";                       // 24+ → usa el de 24
+  }
+
+  // ============ GENERATE BADGES ============
+  function generateBadges(m, cosmetics) {
+    let html = "";
+    const kickBadges = m.identity?.badges || m.sender?.identity?.badges || [];
+
+    kickBadges.forEach(b => {
+      const tipo = (b.type || "").toLowerCase();
+
+      if (tipo === "subscriber") {
+        const monthsRaw = b.months || b.count || b.level || b.duration || 1;
+        const key = getSubBadgeKey(monthsRaw);
+
+        let badgeUrl = subBadgesByMonths[key];
+
+        // Fallback si falta el tier exacto
+        if (!badgeUrl) {
+          const orden = ["24","18","12","9","6","3","2","1"];
+          for (const k of orden) {
+            if (subBadgesByMonths[k]) {
+              badgeUrl = subBadgesByMonths[k];
+              break;
+            }
+          }
+        }
+
+        // Último fallback genérico
+        if (!badgeUrl) {
+          badgeUrl = "https://files.kick.com/channel_subscriber_badges/754874/original";
+        }
+
+        html += `<img src="${badgeUrl}" alt="Suscriptor ${monthsRaw} meses" class="badge-icon" title="Suscriptor ${monthsRaw} meses (tier ${key})">`;
+      } else {
+        const icon = KICK_BADGES[tipo];
+        if (icon) {
+          html += `<img src="${icon}" alt="${tipo}" title="${b.text || tipo}" class="badge-icon">`;
+        }
+      }
+    });
+
+    // 7TV badges (sin cambios)
+    if (cosmetics?.badges?.length) {
+      cosmetics.badges.forEach(b => {
+        if (b.url) {
+          html += `<img src="${b.url}" alt="${b.tooltip || '7TV'}" title="${b.tooltip || '7TV'}" class="badge-icon">`;
+        }
+      });
+    }
+
+    return html;
+  }
+
+  // ============ Resto del código (sin cambios importantes) ============
+
+  let seventvUserCache = {};
+
+  async function fetch7TVUserCosmetics(kickUserId) {
+    if (!kickUserId || seventvUserCache[kickUserId] !== undefined) return seventvUserCache[kickUserId];
+    try {
+      const data = await smartFetch(`https://7tv.io/v3/users/kick/${kickUserId}`);
+      if (!data?.user) {
+        seventvUserCache[kickUserId] = null;
+        return null;
+      }
+      const cosmetics = {
+        paint: data.user.style?.paints?.[0] || null,
+        badges: data.user.style?.badges || []
+      };
+      seventvUserCache[kickUserId] = cosmetics;
+      return cosmetics;
+    } catch {
+      seventvUserCache[kickUserId] = null;
+      return null;
+    }
+  }
+
+  async function loadFFZData() {
+    try {
+      const data = await raceFetch("https://api.frankerfacez.com/v1/set/global");
+      if (data.sets) {
+        Object.values(data.sets).forEach(set => {
+          set.emoticons.forEach(e => {
+            emotesData.ffz.global[e.name] = {
+              url: `https://cdn.frankerfacez.com/emote/${e.id}/2`,
+              url2x: `https://cdn.frankerfacez.com/emote/${e.id}/4`
+            };
+          });
+        });
+      }
+    } catch {}
+  }
+
+  async function loadBTTVData() {
+    try {
+      const data = await smartFetch("https://api.betterttv.net/3/cached/emotes/global");
+      data.forEach(e => {
+        emotesData.bttv.global[e.code] = {
+          url: `https://cdn.betterttv.net/emote/${e.id}/2x`,
+          url2x: `https://cdn.betterttv.net/emote/${e.id}/3x`
+        };
+      });
+    } catch {}
+  }
+
+  async function load7TVData() {
+    try {
+      const data = await smartFetch("https://7tv.io/v3/emote-sets/global");
+      data.emotes?.forEach(e => {
+        const host = e.data.host;
+        const file = host.files.find(f => f.format === 'WEBP') || host.files[0];
+        if (file) {
+          emotesData.seventv.global[e.name] = {
+            url: `https:${host.url}/${file.name}`,
+            url2x: `https:${host.url}/${host.files[1]?.name || file.name}`
+          };
+        }
+      });
+    } catch {}
+  }
+
+  async function loadChannelCustom7TVSets(channelSlug) {
+    const setIds = STREAMER_CUSTOM_7TV_SETS[channelSlug?.toLowerCase()] || [];
+    if (!setIds.length) return;
+
+    for (const setId of setIds) {
+      try {
+        const data = await smartFetch(`https://7tv.io/v3/emote-sets/${setId}`);
+        data.emotes?.forEach(e => {
+          const host = e.data.host;
+          const file = host.files.find(f => f.format === 'WEBP') || host.files[0];
+          if (file) {
+            emotesData.seventv.community[e.name] = {
+              url: `https:${host.url}/${file.name}`,
+              url2x: `https:${host.url}/${host.files[1]?.name || file.name}`
+            };
+          }
+        });
+      } catch {}
+    }
+  }
+
+  async function loadAllThirdPartyData(channelSlug) {
+    statusMsg.textContent = "Cargando emotes...";
+    await Promise.all([
+      loadChannelCustom7TVSets(channelSlug),
+      loadFFZData(),
+      loadBTTVData(),
+      load7TVData()
+    ]);
+  }
+
+  function processEmotes(text) {
+    if (!text) return "";
+    let result = text;
+
+    // Kick native emotes
+    result = result.replace(/\[emote:(\d+):([^\]]+)\]/g, (_, id) => 
+      `<img src="https://files.kick.com/emotes/${id}/fullsize" class="emote">`
+    );
+
+    // 7TV community → global → bttv → ffz (orden de prioridad inverso al largo)
+    [
+      ...Object.entries(emotesData.seventv.community),
+      ...Object.entries(emotesData.seventv.global),
+      ...Object.entries(emotesData.bttv.global),
+      ...Object.entries(emotesData.ffz.global)
+    ]
+    .sort((a,b) => b[0].length - a[0].length)
+    .forEach(([code, emote]) => {
+      const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(
+        new RegExp(`(?<!<[^>]*>)\\b${escaped}\\b(?![^<]*>)`, 'g'),
+        `<img src="${emote.url}" srcset="${emote.url} 1x, ${emote.url2x || emote.url} 2x" class="emote-third" alt="${code}" title="${code}">`
+      );
+    });
+
+    return result;
+  }
+
+  function generateNamePaint(m, cosmetics) {
+    const base = m.identity?.color || m.sender?.identity?.color || "#00ff66";
+    if (!cosmetics?.paint) return `color: ${base};`;
+
+    const p = cosmetics.paint;
+    let style = "";
+    if (p.gradient?.stops) {
+      const stops = p.gradient.stops.map(s => `${s.color} ${s.at*100}%`).join(', ');
+      style = `background: linear-gradient(${p.gradient.angle || 90}deg, ${stops}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;`;
+    } else if (p.color) {
+      style = `color: ${p.color};`;
+    }
+    if (p.shadows?.length) {
+      const shadows = p.shadows.map(s => `drop-shadow(${s.x_offset||0}px ${s.y_offset||0}px ${s.radius||0}px ${s.color})`).join(' ');
+      style += ` filter: ${shadows};`;
+    }
+    return style || `color: ${base};`;
+  }
+
+  async function addMessage(m) {
+    if (messageIds.has(m.id)) return;
+    messageIds.add(m.id);
+
+    const username = m.sender?.username || "Anónimo";
+    const kickUserId = m.sender?.id || "";
+
+    const cosmetics = kickUserId ? await fetch7TVUserCosmetics(kickUserId) : null;
+
+    const badgesHTML = generateBadges(m, cosmetics);
+    const nameStyle = generateNamePaint(m, cosmetics);
+    const content = processEmotes(m.content);
+
+    const msg = document.createElement("div");
+    msg.className = "msg";
+    msg.innerHTML = `
+      <span class="meta">
+        <span class="user" style="${nameStyle}">${badgesHTML}${username}</span>
+      </span>
+      <span class="text">${content}</span>
+    `;
+
+    chatDiv.appendChild(msg);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+  }
+
+  async function getChannelId(channelSlug) {
+    statusMsg.textContent = "Obteniendo canal...";
+    statusMsg.style.color = "#53fc18";
+    try {
+      const data = await smartFetch(`https://kick.com/api/v1/channels/${channelSlug}`);
+      return {
+        channelId: data.id,
+        chatroomId: data.chatroom?.id,
+        isLive: !!data.livestream?.id
+      };
+    } catch (err) {
+      statusMsg.textContent = "Error: " + err.message;
+      statusMsg.style.color = "#ff4444";
+      throw err;
+    }
+  }
+
+  async function loadChat() {
+    const channelName = channelInput.value.trim().toLowerCase();
+    if (!channelName) {
+      statusMsg.textContent = "Ingresa un nombre de canal";
+      statusMsg.style.color = "#ff4444";
+      return;
+    }
+
+    try {
+      const result = await getChannelId(channelName);
+      CHANNEL_ID = result.channelId;
+      CHATROOM_ID = result.chatroomId;
+      currentChannel = channelName;
+      CHAT_URL = `https://kick.com/api/v2/channels/${CHANNEL_ID}/messages`;
+
+      await loadChannelSubBadges(channelName);
+      await loadAllThirdPartyData(channelName);
+
+      const isDirectLink = getUrlParams() !== null;
+      if (isDirectLink) {
+        inputContainer.style.display = "none";
+        chatDiv.style.display = "flex";
+      } else {
+        statusMsg.textContent = result.isLive ? `🔴 EN VIVO: ${channelName}` : `⚫ OFFLINE: ${channelName}`;
+        statusMsg.style.color = result.isLive ? "#53fc18" : "#ffaa00";
+        generatedLink.value = generateLink(channelName);
+        linkContainer.style.display = "block";
+        channelInput.style.display = "none";
+        loadBtn.style.display = "none";
+        chatDiv.style.display = "flex";
+      }
+
+      chatDiv.innerHTML = "";
+      messageIds.clear();
+
+      connectWebSocket();
+      fetchInitialMessages();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function connectWebSocket() {
+    if (kickWS) kickWS.close();
+    kickWS = new WebSocket(PUSHER_WS_URL);
+
+    kickWS.addEventListener("open", () => {
+      kickWS.send(JSON.stringify({
+        event: "pusher:subscribe",
+        data: { auth: "", channel: `chatrooms.${CHATROOM_ID}.v2` }
+      }));
+    });
+
+    kickWS.addEventListener("message", (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed.event === "App\\Events\\ChatMessageEvent") {
+          const data = JSON.parse(parsed.data);
+          addMessage({
+            id: data.id,
+            content: data.content,
+            sender: data.sender,
+            identity: data.sender.identity
+          });
+        }
+      } catch {}
+    });
+
+    kickWS.addEventListener("error", () => setTimeout(connectWebSocket, 1500));
+    kickWS.addEventListener("close", () => setTimeout(connectWebSocket, 1500));
+  }
+
+async function fetchInitialMessages() {
+  if (!CHAT_URL) return;
+
+  let url = CHAT_URL;
+  let loaded = 0;
+  const MAX_PAGES = 3;      // intenta hasta 3 páginas (ajusta según rate-limit)
+  const MESSAGES_PER_PAGE = 100; // suposición
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    try {
+      const data = await raceFetch(url);
+      const msgs = data?.data?.messages || data?.messages || [];
+
+      if (!msgs.length) break;
+
+      msgs.reverse().forEach(m => {
+        if (!messageIds.has(m.id)) {
+          messageIds.add(m.id);
+          addMessage(m);
+          loaded++;
+        }
+      });
+
+      // Intento de paginación (cambia según lo que veas en Network tab)
+      // Ejemplos probados por gente: ?before={last_id}  o  ?cursor={next_cursor}
+      const lastMsg = msgs[msgs.length - 1];
+      if (!lastMsg?.id) break;
+
+      url = `${CHAT_URL}?before=${lastMsg.id}`;  // ← prueba este parámetro primero
+      // Alternativas a probar si no funciona:
+      // url = `${CHAT_URL}?cursor=${lastMsg.id}`;
+      // url = `${CHAT_URL}?limit=100&before_id=${lastMsg.id}`;
+
+      await new Promise(r => setTimeout(r, 800)); // delay anti-rate-limit
+    } catch (e) {
+      console.warn("Error en página de historial", page, e);
+      break;
+    }
+  }
+
+  console.log(`Cargados ${loaded} mensajes iniciales`);
+  statusMsg.textContent += ` | ${loaded} mensajes históricos cargados`;
+}
+
+  // Eventos
+  copyLinkBtn.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(generatedLink.value);
+    copyLinkBtn.textContent = "Copiado ✓";
+    setTimeout(() => copyLinkBtn.textContent = "📋 Copiar", 1800);
+  });
+
+  openLinkBtn.addEventListener("click", () => window.open(generatedLink.value, "_blank"));
+
+  loadBtn.addEventListener("click", loadChat);
+  channelInput.addEventListener("keypress", e => {
+    if (e.key === "Enter") loadChat();
+  });
+
+  window.addEventListener("DOMContentLoaded", () => {
+    const param = getUrlParams();
+    if (param) {
+      channelInput.value = param;
+      loadChat();
+    }
+  });
+</script>
+</body>
+</html>
